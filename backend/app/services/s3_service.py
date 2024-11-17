@@ -49,3 +49,48 @@ class S3Service:
         except Exception as e:
             print(f"Error generating presigned URL: {str(e)}")
             raise
+
+    def download_video(self, video_key: str, local_path: str):
+        """Download a video from S3 to a local path"""
+        try:
+            print(f"Downloading video {video_key} from S3...")
+            self.client.download_file(
+                self.bucket_name,
+                video_key,
+                local_path
+            )
+            print(f"Video downloaded successfully to {local_path}")
+        except Exception as e:
+            print(f"Error downloading video from S3: {str(e)}")
+            raise
+
+    def upload_frame(self, local_path: str, frame_key: str) -> str:
+        """Upload a frame to S3 and return its URL"""
+        try:
+            print(f"Uploading frame {frame_key} to S3...")
+            self.client.upload_file(
+                local_path,
+                self.bucket_name,
+                frame_key,
+                ExtraArgs={
+                    'ContentType': 'image/jpeg',
+                    'ACL': 'public-read'
+                }
+            )
+            
+            # Generate public URL for the frame
+            frame_url = f"https://{self.bucket_name}.s3.amazonaws.com/{frame_key}"
+            print(f"Frame uploaded successfully. URL: {frame_url}")
+            return frame_url
+        except Exception as e:
+            print(f"Error uploading frame to S3: {str(e)}")
+            raise
+
+    def get_video_url(self, video_key: str) -> str:
+        """Get the URL of a video in S3"""
+        try:
+            url = f"https://{self.bucket_name}.s3.amazonaws.com/{video_key}"
+            return url
+        except Exception as e:
+            print(f"Error generating video URL: {str(e)}")
+            raise

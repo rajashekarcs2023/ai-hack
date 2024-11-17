@@ -14,14 +14,22 @@ import {
   Clock,
   Upload,
   Loader2,
-  Download 
+  Download,
+  Car, 
+  UserRound, 
+  AlertTriangle, 
+  Cloud, 
+  Siren,
+  Save,
+  Bell,
+  History 
 } from 'lucide-react';
 
 const EmergencyDashboard = () => {
   // Service selection states
   const [selectedServices, setSelectedServices] = useState({
-    police: true,
-    ambulance: true,
+    police: false,
+    ambulance: false,
     fire: false
   });
 
@@ -41,81 +49,47 @@ const EmergencyDashboard = () => {
   const [processError, setProcessError] = useState(null);
   const [processedFrames, setProcessedFrames] = useState([]);
   const [incidentReport, setIncidentReport] = useState(null);
+  const [analysisKeywords, setAnalysisKeywords] = useState([]);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+const [notes, setNotes] = useState('');
+const [isSaving, setIsSaving] = useState(false); 
+const [incidentHistory, setIncidentHistory] = useState([]);
+const [notifications, setNotifications] = useState(3);
 
   // Refs for resize functionality
   const resizeRef = useRef(null);
   const isDraggingRef = useRef(false);
 
-  // Sample data for initial state
-  const sampleFrames = Array(4).fill().map((_, i) => ({
-    id: i + 1,
-    src: "/api/placeholder/200/150",
-    timestamp: `14:${35 + i}:${Math.floor(Math.random() * 60).toString().padStart(2, '0')}`
-  }));
-
-  const defaultIncidentDescription = `URGENT: Major Vehicle Collision
-Time of Report: 14:35 EST
-Location: Main Street & 5th Avenue
-
-PRIMARY ASSESSMENT:
-- Multiple vehicle collision (3+ vehicles involved)
-- Airbags deployed in all vehicles
-- Smoke visible from engine compartment of vehicle 1
-- Fuel leak detected
-- Traffic signals damaged
-
-INJURIES REPORTED:
-- Vehicle 1: Driver trapped, conscious, showing signs of distress
-- Vehicle 2: Two occupants, minor visible injuries
-- Vehicle 3: Driver and passenger, status uncertain
-- Multiple pedestrian witnesses reporting minor injuries
-
-ENVIRONMENTAL CONDITIONS:
-- Weather: Clear skies
-- Road Surface: Dry
-- Traffic: Heavy congestion forming
-- Visibility: Good
-
-HAZARDS IDENTIFIED:
-- Active fuel leak from Vehicle 1
-- Smoke intensifying
-- Live traffic approaching scene
-- Damaged infrastructure
-
-IMMEDIATE NEEDS:
-- Heavy rescue equipment required
-- Multiple ambulance units recommended
-- Fire suppression standby
-- Traffic control urgently needed
-
-ADDITIONAL NOTES:
-- Large crowd gathering
-- Media presence likely
-- Adjacent businesses affected
-- Power lines potentially compromised
-
-WITNESS INFORMATION:
-- Multiple bystanders recording
-- Traffic camera footage available
-- Dashcam footage reported available
-- First responders already on scene report needed
-
-RESOURCE REQUESTS:
-- Multiple ambulance units
-- Heavy rescue equipment
-- Hazmat team standby
-- Traffic division support`;
-
-  // Upload progress simulation
-  useEffect(() => {
-    let progressInterval;
-    if (isUploading && uploadProgress < 90) {
-      progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 10, 90));
-      }, 500);
+  const handleSaveNotes = async () => {
+    try {
+      setIsSaving(true);
+      const response = await fetch('http://localhost:8000/api/save-incident', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          incidentReport: incidentReport,
+          selectedServices: selectedServices,
+          notes: notes,
+          timestamp: new Date().toISOString(),
+        })
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to save incident details');
+      }
+  
+      alert('Incident details saved successfully');
+      setNotes('');
+      setIsConfirmed(false);
+    } catch (error) {
+      console.error('Save failed:', error);
+      alert('Failed to save incident details');
+    } finally {
+      setIsSaving(false);
     }
-    return () => clearInterval(progressInterval);
-  }, [isUploading, uploadProgress]);
+  };
 
   // Video upload handler
   const handleVideoUpload = async (event) => {
@@ -176,280 +150,518 @@ RESOURCE REQUESTS:
       setIsUploading(false);
     }
   };
+// Video processing handler
+const processVideo = async (videoKey) => {
+  setIsProcessing(true);
+  setProcessError(null);
 
-  // Video processing handler
-  const processVideo = async (videoKey) => {
-    setIsProcessing(true);
-    setProcessError(null);
+  try {
+    const response = await fetch('http://localhost:8000/api/process-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoKey })
+    });
 
-    try {
-      const response = await fetch('http://localhost:8000/api/process-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoKey })
+    if (!response.ok) throw new Error('Failed to process video');
+
+    const result = await response.json();
+    console.log('Raw API response:', result); // Add this debug log
+    
+    if (result.status === 'success') {
+      // Update frames with base64 images
+      setProcessedFrames(result.frames.map(frame => ({
+        id: frame.id,
+        src: `data:image/jpeg;base64,${frame.image}`,
+        timestamp: frame.timestamp
+      })));
+
+      // Update incident report with the analysis
+      setIncidentReport({
+        analysis: result.analysis
       });
-
-      if (!response.ok) throw new Error('Failed to process video');
-
-      const result = await response.json();
       
-      if (result.status === 'success') {
-        setProcessedFrames(result.frames || []);
-        setIncidentReport(result.report || defaultIncidentDescription);
-      } else {
-        throw new Error(result.error || 'Processing failed');
+      console.log('Setting incident report with:', result.analysis); // Add this debug log
+
+      // Update emergency services based on keywords
+      if (result.keywords) {
+        setAnalysisKeywords(result.keywords);
+        setSelectedServices({
+          police: result.keywords.includes('Vehicle Collision'),
+          ambulance: result.keywords.includes('Injuries') || result.keywords.includes('Critical Condition'),
+          fire: result.keywords.includes('Fire Hazard') || result.keywords.includes('Fuel Leak')
+        });
       }
-    } catch (error) {
-      console.error('Processing failed:', error);
-      setProcessError(error.message || 'Failed to process video');
-    } finally {
-      setIsProcessing(false);
+    } else {
+      throw new Error(result.error || 'Processing failed');
     }
-  };
+  } catch (error) {
+    console.error('Processing failed:', error);
+    setProcessError(error.message || 'Failed to process video');
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
-  // Resize handlers
-  const handleMouseDown = (e) => {
-    e.preventDefault();
-    isDraggingRef.current = true;
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
+// Upload progress simulation
+useEffect(() => {
+  let progressInterval;
+  if (isUploading && uploadProgress < 90) {
+    progressInterval = setInterval(() => {
+      setUploadProgress(prev => Math.min(prev + 10, 90));
+    }, 500);
+  }
+  return () => clearInterval(progressInterval);
+}, [isUploading, uploadProgress]);
 
-  const handleMouseMove = (e) => {
-    if (!isDraggingRef.current) return;
-    const containerWidth = window.innerWidth;
-    const newPosition = (e.clientX / containerWidth) * 100;
-    const newLeftWidth = Math.max(20, Math.min(80, newPosition));
-    const newRightWidth = 100 - newLeftWidth;
-    setLeftWidth(newLeftWidth);
-    setRightWidth(newRightWidth);
-  };
+// Resize handlers
+const handleMouseDown = (e) => {
+  e.preventDefault();
+  isDraggingRef.current = true;
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('mouseup', handleMouseUp);
+};
 
-  const handleMouseUp = () => {
-    isDraggingRef.current = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-  };
+const handleMouseMove = (e) => {
+  if (!isDraggingRef.current) return;
+  const containerWidth = window.innerWidth;
+  const newPosition = (e.clientX / containerWidth) * 100;
+  const newLeftWidth = Math.max(20, Math.min(80, newPosition));
+  const newRightWidth = 100 - newLeftWidth;
+  setLeftWidth(newLeftWidth);
+  setRightWidth(newRightWidth);
+};
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-white border-b shadow-sm">
-        <div className="max-w-[2000px] mx-auto px-4 py-3 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Emergency Incident Dashboard</h1>
-          <Button 
+const handleMouseUp = () => {
+  isDraggingRef.current = false;
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseup', handleMouseUp);
+};
+
+// Helper function to handle export
+const handleExport = () => {
+  // TODO: Implement PDF export
+  console.log('Export functionality to be implemented');
+};
+
+// Helper function to determine button color based on service type
+const getServiceButtonColor = (service, isSelected) => {
+  if (!isSelected) return '';
+  
+  switch(service) {
+    case 'police':
+      return 'bg-blue-600 hover:bg-blue-700';
+    case 'ambulance':
+      return 'bg-red-500 hover:bg-red-600';
+    case 'fire':
+      return 'bg-orange-500 hover:bg-orange-600';
+    default:
+      return 'bg-green-600 hover:bg-green-700';
+  }
+};
+console.log('Analysis structure:', {
+  vehicleDetails: incidentReport?.analysis?.vehicleDetails,
+  casualties: incidentReport?.analysis?.casualties,
+  hazards: incidentReport?.analysis?.hazards,
+  environment: incidentReport?.analysis?.environment,
+  services: incidentReport?.analysis?.services
+});
+
+console.log('Raw report:', incidentReport);
+return (
+  <div className="min-h-screen bg-gray-50">
+    {/* Header */}
+    <header className="sticky top-0 z-10 bg-white border-b shadow-sm">
+  <div className="max-w-[2000px] mx-auto px-4 py-3 flex justify-between items-center">
+    <h1 className="text-2xl font-bold">Emergency Incident Dashboard</h1>
+    <div className="flex items-center gap-3">
+      {/* Past Incidents Button */}
+      <Button 
+        variant="outline"
+        onClick={() => {/* TODO: Handle past incidents */}}
+        className="flex items-center gap-2"
+      >
+        <History className="h-5 w-5" />
+        Past Incidents
+      </Button>
+
+      {/* Map/Frames Toggle Button */}
+      <Button 
+        variant="outline"
+        onClick={() => setShowMap(!showMap)}
+        className="flex items-center gap-2"
+      >
+        {showMap ? <Images className="h-5 w-5" /> : <Map className="h-5 w-5" />}
+        {showMap ? 'Show Frames' : 'Show Map'}
+      </Button>
+
+      {/* Notifications Button */}
+      <Button 
+        variant="outline" 
+        className="relative"
+        onClick={() => {/* TODO: Handle notifications */}}
+      >
+        <Bell className="h-5 w-5" />
+        {notifications > 0 && (
+          <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+            {notifications}
+          </div>
+        )}
+      </Button>
+    </div>
+  </div>
+</header>
+
+    {/* Main Content */}
+    <main className="flex h-[calc(100vh-64px)]">
+      {/* Left Panel */}
+      <div style={{ width: `${leftWidth}%` }} className="p-4">
+        {/* Upload Card */}
+        <Card className="mb-4">
+          <div className="p-4">
+            <h2 className="text-xl font-semibold mb-4">Video Upload</h2>
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                <label className="flex flex-col items-center justify-center cursor-pointer">
+                  <input
+                    type="file"
+                    accept="video/mp4,video/avi,video/mov"
+                    className="hidden"
+                    onChange={handleVideoUpload}
+                    disabled={isUploading || isProcessing}
+                  />
+                  {isUploading ? (
+                    <div className="flex flex-col items-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                      <p className="mt-2 text-sm text-gray-500">Uploading video...</p>
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                        <div 
+                          className="bg-blue-500 h-2.5 rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center">
+                      <Upload className="h-8 w-8 text-gray-400" />
+                      <p className="mt-2 text-sm text-gray-500">Click or drag video to upload</p>
+                      <p className="text-xs text-gray-400 mt-1">MP4, AVI, MOV up to 100MB</p>
+                    </div>
+                  )}
+                </label>
+              </div>
+              {uploadError && (
+                <div className="text-sm text-red-500">
+                  ⚠️ {uploadError}
+                </div>
+              )}
+              {videoUrl && !uploadError && (
+                <div className="text-sm text-green-500">
+                  ✓ Video uploaded successfully
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* Frames/Map Card */}
+        {/* Frames/Map Card */}
+<Card className="h-[calc(100%-160px)]">
+  <div className="flex flex-col h-full">
+    <div className="border-b p-4">
+      <h2 className="text-xl font-semibold">
+        {showMap ? 'Incident Location' : 'Incident Frames'}
+      </h2>
+    </div>
+    <div className="flex-1 p-4 relative overflow-auto"> {/* Added overflow-auto here */}
+      {isProcessing && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg z-10">
+          <div className="text-white text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+            <p className="mt-2">Processing video...</p>
+          </div>
+        </div>
+      )}
+      {showMap ? (
+        <div className="h-full bg-blue-50 rounded-lg">
+          <img 
+            src="/api/placeholder/800/600" 
+            alt="Map"
+            className="w-full h-full object-cover rounded-lg"
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 auto-rows-min">
+  {(processedFrames.slice(0, 4).length > 0 ? processedFrames.slice(0, 4) : []).map((frame) => (
+    <Card key={frame.id} className="relative aspect-video">
+      <img 
+        src={frame.src}
+        alt={`Incident frame ${frame.id}`}
+        className="w-full h-full object-cover rounded-lg"
+      />
+      <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded-md text-sm flex items-center gap-2">
+        <Clock className="h-4 w-4" />
+        {frame.timestamp}
+      </div>
+    </Card>
+  ))}
+</div>
+      )}
+      {processError && (
+        <div className="absolute bottom-4 left-4 right-4 bg-red-100 text-red-600 p-2 rounded">
+          {processError}
+        </div>
+      )}
+    </div>
+  </div>
+</Card>
+      </div>
+    {/* Resize Handle */}
+    <div
+        ref={resizeRef}
+        className="w-1 bg-gray-200 cursor-col-resize hover:bg-gray-300 hover:w-1 transition-colors"
+        onMouseDown={handleMouseDown}
+      />
+
+      {/* Right Panel */}
+      {/* Right Panel */}
+<div style={{ width: `${rightWidth}%` }} className="p-4">
+  <Card className="h-full">
+    <div className="flex flex-col h-full">
+      <div className="border-b p-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-semibold">Incident Analysis</h2>
+          <Button
             variant="outline"
-            onClick={() => setShowMap(!showMap)}
+            onClick={handleExport}
             className="flex items-center gap-2"
+            disabled={!incidentReport}
           >
-            {showMap ? <Images className="h-5 w-5" /> : <Map className="h-5 w-5" />}
-            {showMap ? 'Show Frames' : 'Show Map'}
+            <Download className="h-4 w-4" />
+            Export Report
           </Button>
         </div>
-      </header>
+      </div>
+      
+      <div className="flex-1 p-4 overflow-y-auto">
+      {console.log('incidentReport:', incidentReport)} 
+        {isProcessing ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          </div>
+        ) : incidentReport ? (
+          <Card className="p-6 bg-gradient-to-br from-slate-50 to-slate-100">
+            <h2 className="text-2xl font-bold text-indigo-700 mb-6">
+              Comprehensive Incident Analysis
+            </h2>
+            
+            <div className="space-y-6">
+              {/* Vehicle Details Section */}
+              <div className="analysis-section">
+                <h3 className="text-xl font-semibold text-red-600 mb-3 flex items-center gap-2">
+                  <Car className="h-6 w-6" />
+                  Vehicle Details
+                </h3>
+                <div className="pl-4 border-l-4 border-red-200 text-slate-700">
+                  {incidentReport.analysis?.vehicleDetails?.map((detail, index) => (
+                    <p key={index} className="mb-2">• {detail}</p>
+                  ))}
+                </div>
+              </div>
 
-      {/* Main Content */}
-      <main className="flex h-[calc(100vh-64px)]">
-        {/* Left Panel */}
-        <div style={{ width: `${leftWidth}%` }} className="p-4">
-          {/* Upload Card */}
-          <Card className="mb-4">
-            <div className="p-4">
-              <h2 className="text-xl font-semibold mb-4">Video Upload</h2>
+              {/* Casualties Section */}
+              <div className="analysis-section">
+                <h3 className="text-xl font-semibold text-amber-600 mb-3 flex items-center gap-2">
+                  <UserRound className="h-6 w-6" />
+                  Casualties and Trapped Persons
+                </h3>
+                <div className="pl-4 border-l-4 border-amber-200 text-slate-700">
+                  {incidentReport.analysis?.casualties?.map((detail, index) => (
+                    <p key={index} className="mb-2">• {detail}</p>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hazard Assessment Section */}
+              <div className="analysis-section">
+                <h3 className="text-xl font-semibold text-orange-600 mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-6 w-6" />
+                  Hazard Assessment
+                </h3>
+                <div className="pl-4 border-l-4 border-orange-200 text-slate-700">
+                  {incidentReport.analysis?.hazards?.map((detail, index) => (
+                    <p key={index} className="mb-2">• {detail}</p>
+                  ))}
+                </div>
+              </div>
+
+              {/* Environmental Conditions Section */}
+              <div className="analysis-section">
+                <h3 className="text-xl font-semibold text-emerald-600 mb-3 flex items-center gap-2">
+                  <Cloud className="h-6 w-6" />
+                  Environmental Conditions
+                </h3>
+                <div className="pl-4 border-l-4 border-emerald-200 text-slate-700">
+                  {incidentReport.analysis?.environment?.map((detail, index) => (
+                    <p key={index} className="mb-2">• {detail}</p>
+                  ))}
+                </div>
+              </div>
+
+              {/* Emergency Services Section */}
+              <div className="analysis-section">
+                <h3 className="text-xl font-semibold text-blue-600 mb-3 flex items-center gap-2">
+                  <Siren className="h-6 w-6" />
+                  Emergency Services Required
+                </h3>
+                <div className="pl-4 border-l-4 border-blue-200 text-slate-700">
+                  {incidentReport.analysis?.services?.map((detail, index) => (
+                    <p key={index} className="mb-2">• {detail}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <div className="flex items-center justify-center h-full text-slate-500">
+            Upload a video to begin analysis
+          </div>
+        )}
+      </div>
+
+
+              {/* Emergency Services Section */}
+              <div className="p-4 border-t">
               <div className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-                  <label className="flex flex-col items-center justify-center cursor-pointer">
-                    <input
-                      type="file"
-                      accept="video/mp4,video/avi,video/mov"
-                      className="hidden"
-                      onChange={handleVideoUpload}
-                      disabled={isUploading}
-                    />
-                    {isUploading ? (
-                      <div className="flex flex-col items-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                        <p className="mt-2 text-sm text-gray-500">Uploading video...</p>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-                          <div 
-                            className="bg-blue-500 h-2.5 rounded-full transition-all duration-300"
-                            style={{ width: `${uploadProgress}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center">
-                        <Upload className="h-8 w-8 text-gray-400" />
-                        <p className="mt-2 text-sm text-gray-500">Click or drag video to upload</p>
-                        <p className="text-xs text-gray-400 mt-1">MP4, AVI, MOV up to 100MB</p>
-                      </div>
-                    )}
-                  </label>
+                <h3 className="font-medium text-lg">Emergency Services Required:</h3>
+                <div className="space-y-2">
+                  <Button
+                    variant={selectedServices.police ? "default" : "outline"}
+                    className={`w-full justify-start ${getServiceButtonColor('police', selectedServices.police)}`}
+                    onClick={() => setSelectedServices(prev => ({...prev, police: !prev.police}))}
+                  >
+                    <Shield className="mr-2 h-5 w-5" />
+                    Police
+                    {analysisKeywords.includes('Vehicle Collision') && 
+                      <span className="ml-auto text-xs bg-white/20 px-2 py-1 rounded">Recommended</span>
+                    }
+                  </Button>
+                  <Button
+                    variant={selectedServices.ambulance ? "default" : "outline"}
+                    className={`w-full justify-start ${getServiceButtonColor('ambulance', selectedServices.ambulance)}`}
+                    onClick={() => setSelectedServices(prev => ({...prev, ambulance: !prev.ambulance}))}
+                  >
+                    <Ambulance className="mr-2 h-5 w-5" />
+                    Ambulance
+                    {(analysisKeywords.includes('Injuries') || analysisKeywords.includes('Critical Condition')) && 
+                      <span className="ml-auto text-xs bg-white/20 px-2 py-1 rounded">Recommended</span>
+                    }
+                  </Button>
+                  <Button
+                    variant={selectedServices.fire ? "default" : "outline"}
+                    className={`w-full justify-start ${getServiceButtonColor('fire', selectedServices.fire)}`}
+                    onClick={() => setSelectedServices(prev => ({...prev, fire: !prev.fire}))}
+                  >
+                    <FireExtinguisher className="mr-2 h-5 w-5" />
+                    Fire
+                    {(analysisKeywords.includes('Fire Hazard') || analysisKeywords.includes('Fuel Leak')) && 
+                      <span className="ml-auto text-xs bg-white/20 px-2 py-1 rounded">Recommended</span>
+                    }
+                  </Button>
                 </div>
-                {uploadError && (
-                  <div className="text-sm text-red-500">
-                    ⚠️ {uploadError}
-                  </div>
-                )}
-                {videoUrl && (
-                  <div className="text-sm text-green-500">
-                    ✓ Video uploaded successfully
-                  </div>
-                )}
               </div>
-            </div>
-          </Card>
 
-          {/* Frames/Map Card */}
-          <Card className="h-[calc(100%-160px)]">
-            <div className="flex flex-col h-full">
-              <div className="border-b p-4">
-                <h2 className="text-xl font-semibold">
-                  {showMap ? 'Incident Location' : 'Incident Frames'}
-                </h2>
-              </div>
-              <div className="flex-1 p-4 relative">
-                {isProcessing && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg z-10">
-                    <div className="text-white text-center">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                      <p className="mt-2">Processing video...</p>
-                    </div>
-                  </div>
-                )}
-                {showMap ? (
-                  <div className="h-full bg-blue-50 rounded-lg">
-                    <img 
-                      src="/api/placeholder/800/600" 
-                      alt="Map"
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-4 h-full">
-                    {(processedFrames.length > 0 ? processedFrames : sampleFrames).map((frame) => (
-                      <Card key={frame.id} className="relative overflow-hidden">
-                        <img 
-                          src={frame.src}
-                          alt={`Incident frame ${frame.id}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded-md text-sm flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          {frame.timestamp}
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-                {processError && (
-                  <div className="absolute bottom-4 left-4 right-4 bg-red-100 text-red-600 p-2 rounded">
-                    {processError}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Resize Handle */}
-        <div
-          ref={resizeRef}
-          className="w-1 bg-gray-200 cursor-col-resize hover:bg-gray-300 hover:w-1 transition-colors"
-          onMouseDown={handleMouseDown}
+              {/* Action Buttons */}
+              <div className="flex gap-4 mt-4">
+  {!isConfirmed ? (
+    <>
+      <Button 
+        variant="destructive"
+        className="flex-1 bg-red-600 hover:bg-red-700"
+        onClick={() => {
+          setSelectedServices({ police: false, ambulance: false, fire: false });
+          alert('Incident response cancelled');
+        }}
+        disabled={isProcessing}
+      >
+        <X className="mr-2 h-5 w-5" />
+        Cancel
+      </Button>
+      <Button 
+        className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+        onClick={async () => {
+          if (Object.values(selectedServices).some(v => v)) {
+            try {
+              // Uncomment this section for the demo
+              /*
+              const response = await fetch('http://localhost:8000/api/phone-call', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  incidentAnalysis: incidentReport
+                })
+              });
+      
+              if (!response.ok) {
+                throw new Error('Failed to initiate phone call');
+              }
+              */
+      
+              alert('Emergency services would be dispatched in production');
+              setIsConfirmed(true); // Show notes section
+            } catch (error) {
+              console.error('Phone call failed:', error);
+              alert('Failed to initiate phone call');
+            }
+          } else {
+            alert('Please select at least one emergency service');
+          }
+        }}
+        disabled={isProcessing || !Object.values(selectedServices).some(v => v)}
+      >
+        <Check className="mr-2 h-5 w-5" />
+        Confirm
+      </Button>
+    </>
+  ) : (
+    <div className="w-full space-y-4">
+      <div className="flex flex-col">
+        <label htmlFor="notes" className="text-sm font-medium text-gray-700 mb-1">
+          Additional Notes
+        </label>
+        <textarea
+          id="notes"
+          className="min-h-[100px] p-2 border border-gray-300 rounded-md"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add any additional notes about the incident..."
         />
-
-        {/* Right Panel */}
-        <div style={{ width: `${rightWidth}%` }} className="p-4">
-          <Card className="h-full">
-            <div className="flex flex-col h-full">
-              <div className="border-b p-4">
-              <div className="flex justify-between items-center">
-
-                <h2 className="text-xl font-semibold">Incident Analysis</h2>
-                <Button
-                    variant="outline"
-                    onClick={() => console.log('Export functionality to be implemented')}
-                    className="flex items-center gap-2"
-                >
-                    <Download className="h-4 w-4" />
-                    Export Report
-                </Button>
-              </div>
-              </div>
-              
-              <div className="p-4 space-y-4">
-                {/* Scrollable Text Area */}
-                <div className="h-[40vh] overflow-auto border rounded-lg p-4">
-                  <Alert>
-                    <AlertDescription className="whitespace-pre-line">
-                      {incidentReport || defaultIncidentDescription}
-                    </AlertDescription>
-                  </Alert>
-                </div>
-      
-                    {/* Emergency Services Section - Fixed Position */}
-                    <div className="space-y-4">
-  <h3 className="font-medium text-lg">Emergency Services Required:</h3>
-  <div className="space-y-2">
-    <Button
-      variant={selectedServices.police ? "default" : "outline"}
-      className={`w-full justify-start ${
-        selectedServices.police ? 'bg-blue-600 hover:bg-blue-700' : ''
-      }`}
-      onClick={() => setSelectedServices(prev => ({...prev, police: !prev.police}))}
-    >
-      <Shield className="mr-2 h-5 w-5" />
-      Police
-    </Button>
-    <Button
-      variant={selectedServices.ambulance ? "default" : "outline"}
-      className={`w-full justify-start ${
-        selectedServices.ambulance ? 'bg-blue-600 hover:bg-blue-700' : ''
-      }`}
-      onClick={() => setSelectedServices(prev => ({...prev, ambulance: !prev.ambulance}))}
-    >
-      <Ambulance className="mr-2 h-5 w-5" />
-      Ambulance
-    </Button>
-    <Button
-      variant={selectedServices.fire ? "default" : "outline"}
-      className={`w-full justify-start ${
-        selectedServices.fire ? 'bg-blue-600 hover:bg-blue-700' : ''
-      }`}
-      onClick={() => setSelectedServices(prev => ({...prev, fire: !prev.fire}))}
-    >
-      <FireExtinguisher className="mr-2 h-5 w-5" />
-      Fire
-    </Button>
-  </div>
+      </div>
+      <Button 
+        className="w-full bg-blue-600 hover:bg-blue-700"
+        onClick={handleSaveNotes}
+        disabled={isSaving}
+      >
+        {isSaving ? (
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        ) : (
+          <Save className="mr-2 h-5 w-5" />
+        )}
+        Save Incident Details
+      </Button>
+    </div>
+  )}
 </div>
-      
-{/* Action Buttons - Fixed at Bottom */}
-    <div className="flex gap-4 mt-4">
-  <Button 
-    variant="destructive"
-    className="flex-1 bg-red-600 hover:bg-red-700"
-    onClick={() => alert('Incident response cancelled')}
-  >
-    <X className="mr-2 h-5 w-5" />
-    Cancel
-  </Button>
-  <Button 
-    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-    onClick={() => alert('Emergency services dispatched')}
-  >
-    <Check className="mr-2 h-5 w-5" />
-    Confirm
-  </Button>
-                    </div>
-                  </div>
-                </div>
-              </Card>
+
+              
             </div>
-          </main>
-        </div>
-      );
+          </div>
+        </Card>
+      </div>
+    </main>
+  </div>
+);
 };
 
 export default EmergencyDashboard;
