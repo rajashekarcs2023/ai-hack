@@ -139,7 +139,7 @@ def create_vapi_call(first_message):
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are an emergency dispatch coordinator. Your role is to clearly communicate critical incident details including: nature of emergency, location, number of people affected, immediate risks, and required emergency services. Provide information in a clear, concise, and urgent manner appropriate for emergency responders."
+                        "content": "You are an emergency dispatch coordinator. Your role is to clearly communicate critical incident details including: nature of emergency, location, number of people affected, immediate risks, and required emergency services. Provide information in a clear, concise, and urgent manner appropriate for emergency responders. Since there is no location info, add some street name in santa clara with exact coordinates."
                     }
                 ]
             },
@@ -215,4 +215,17 @@ async def initiate_phone_call(request_data: Dict):
         }
     except Exception as e:
         print(f"Error in initiate_phone_call: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/past-incidents")
+async def get_past_incidents():
+    try:
+        # Get incidents from DynamoDB
+        response = dynamodb_service.get_all_incidents()
+        return {
+            "status": "success",
+            "incidents": response
+        }
+    except Exception as e:
+        print(f"Error fetching incidents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -30,3 +30,16 @@ class DynamoDBService:
         except Exception as e:
             print(f"Error saving to DynamoDB: {str(e)}")
             raise
+
+    def get_all_incidents(self):
+        try:
+            response = self.table.scan()
+            items = response.get('Items', [])
+            
+            # Sort by timestamp in descending order (most recent first)
+            items.sort(key=lambda x: x['timestamp'], reverse=True)
+            
+            return items
+        except Exception as e:
+            print(f"Error scanning DynamoDB: {str(e)}")
+            raise

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { PastIncidentsModal } from './PastIncidentsModal';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Phone, 
@@ -55,6 +56,9 @@ const [notes, setNotes] = useState('');
 const [isSaving, setIsSaving] = useState(false); 
 const [incidentHistory, setIncidentHistory] = useState([]);
 const [notifications, setNotifications] = useState(3);
+const [map, setMap] = useState(null);
+const mapRef = useRef(null);
+const [showPastIncidents, setShowPastIncidents] = useState(false);
 
   // Refs for resize functionality
   const resizeRef = useRef(null);
@@ -213,6 +217,27 @@ useEffect(() => {
   return () => clearInterval(progressInterval);
 }, [isUploading, uploadProgress]);
 
+useEffect(() => {
+  if (showMap && !map) {
+    // Santa Clara coordinates
+    const santaClaraLocation = { lat: 37.3541, lng: -121.9552 };
+    
+    const newMap = new window.google.maps.Map(mapRef.current, {
+      center: santaClaraLocation,
+      zoom: 14,
+    });
+
+    // Add a marker
+    new window.google.maps.Marker({
+      position: santaClaraLocation,
+      map: newMap,
+      title: "Incident Location"
+    });
+
+    setMap(newMap);
+  }
+}, [showMap]);
+
 // Resize handlers
 const handleMouseDown = (e) => {
   e.preventDefault();
@@ -258,15 +283,7 @@ const getServiceButtonColor = (service, isSelected) => {
       return 'bg-green-600 hover:bg-green-700';
   }
 };
-console.log('Analysis structure:', {
-  vehicleDetails: incidentReport?.analysis?.vehicleDetails,
-  casualties: incidentReport?.analysis?.casualties,
-  hazards: incidentReport?.analysis?.hazards,
-  environment: incidentReport?.analysis?.environment,
-  services: incidentReport?.analysis?.services
-});
 
-console.log('Raw report:', incidentReport);
 return (
   <div className="min-h-screen bg-gray-50">
     {/* Header */}
@@ -277,7 +294,7 @@ return (
       {/* Past Incidents Button */}
       <Button 
         variant="outline"
-        onClick={() => {/* TODO: Handle past incidents */}}
+        onClick={() => setShowPastIncidents(true)}
         className="flex items-center gap-2"
       >
         <History className="h-5 w-5" />
@@ -363,16 +380,16 @@ return (
           </div>
         </Card>
 
+        
         {/* Frames/Map Card */}
-        {/* Frames/Map Card */}
-<Card className="h-[calc(100%-160px)]">
+        <Card className="h-[calc(100%-160px)]">
   <div className="flex flex-col h-full">
     <div className="border-b p-4">
       <h2 className="text-xl font-semibold">
         {showMap ? 'Incident Location' : 'Incident Frames'}
       </h2>
     </div>
-    <div className="flex-1 p-4 relative overflow-auto"> {/* Added overflow-auto here */}
+    <div className="flex-1 p-4 relative overflow-auto">
       {isProcessing && (
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg z-10">
           <div className="text-white text-center">
@@ -382,13 +399,11 @@ return (
         </div>
       )}
       {showMap ? (
-        <div className="h-full bg-blue-50 rounded-lg">
-          <img 
-            src="/api/placeholder/800/600" 
-            alt="Map"
-            className="w-full h-full object-cover rounded-lg"
-          />
-        </div>
+        <div 
+          ref={mapRef} 
+          className="h-full w-full rounded-lg"
+          style={{ minHeight: "400px" }}
+        />
       ) : (
         <div className="grid grid-cols-2 gap-4 auto-rows-min">
   {(processedFrames.slice(0, 4).length > 0 ? processedFrames.slice(0, 4) : []).map((frame) => (
@@ -660,6 +675,7 @@ return (
         </Card>
       </div>
     </main>
+    <PastIncidentsModal open={showPastIncidents} onOpenChange={setShowPastIncidents} />
   </div>
 );
 };
