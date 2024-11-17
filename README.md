@@ -6,6 +6,10 @@ The **Emergency Response Dashboard** is a real-time incident analysis platform d
 
 ---
 
+## Architecture Diagram
+<img width="635" alt="Screenshot 2024-11-17 at 9 21 19 AM" src="https://github.com/user-attachments/assets/2b35c52f-e731-49d7-a985-9b484c6051f3">
+
+
 ## Key Features
 
 ### Core Features
