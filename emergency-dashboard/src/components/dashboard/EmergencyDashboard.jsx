@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PastIncidentsModal } from './PastIncidentsModal';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import jsPDF from 'jspdf';
 import { 
   Phone, 
   Ambulance, 
@@ -26,6 +27,12 @@ import {
   History 
 } from 'lucide-react';
 
+
+// Add this import at the top if not already present
+
+
+// Replace your handleExport function with this:
+
 const EmergencyDashboard = () => {
   // Service selection states
   const [selectedServices, setSelectedServices] = useState({
@@ -33,6 +40,97 @@ const EmergencyDashboard = () => {
     ambulance: false,
     fire: false
   });
+
+  const handleExport = () => {
+    console.log('Export button clicked');
+    console.log('incidentReport:', incidentReport);
+    console.log('selectedServices:', selectedServices);
+  
+    if (!incidentReport) {
+      console.log('No incident report available');
+      return;
+    }
+  
+    try {
+      const doc = new jsPDF();
+      const margin = 20;
+      let yPos = margin;
+  
+      // Title
+      doc.setFontSize(20);
+      doc.text('Incident Analysis Report', margin, yPos);
+      yPos += 15;
+  
+      // Timestamp
+      doc.setFontSize(12);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, margin, yPos);
+      yPos += 15;
+  
+      // Selected Services
+      doc.setFontSize(14);
+      doc.text('Emergency Services Dispatched:', margin, yPos);
+      yPos += 10;
+      doc.setFontSize(12);
+      if (selectedServices.police) doc.text('- Police', margin + 5, yPos += 7);
+      if (selectedServices.ambulance) doc.text('- Ambulance', margin + 5, yPos += 7);
+      if (selectedServices.fire) doc.text('- Fire Department', margin + 5, yPos += 7);
+      yPos += 10;
+  
+      // Analysis sections
+      const analysis = incidentReport.analysis;
+      console.log('Analysis:', analysis);
+      
+      if (analysis.vehicleDetails) {
+        doc.setFontSize(14);
+        doc.text('Vehicle Details:', margin, yPos += 10);
+        doc.setFontSize(12);
+        const vehicleLines = doc.splitTextToSize(analysis.vehicleDetails, 170);
+        doc.text(vehicleLines, margin + 5, yPos += 7);
+        yPos += (vehicleLines.length * 7);
+      }
+  
+      if (analysis.casualties) {
+        doc.setFontSize(14);
+        doc.text('Casualties:', margin, yPos += 10);
+        doc.setFontSize(12);
+        const casualtyLines = doc.splitTextToSize(analysis.casualties, 170);
+        doc.text(casualtyLines, margin + 5, yPos += 7);
+        yPos += (casualtyLines.length * 7);
+      }
+  
+      if (analysis.hazards) {
+        doc.setFontSize(14);
+        doc.text('Hazards:', margin, yPos += 10);
+        doc.setFontSize(12);
+        const hazardLines = doc.splitTextToSize(analysis.hazards, 170);
+        doc.text(hazardLines, margin + 5, yPos += 7);
+        yPos += (hazardLines.length * 7);
+      }
+  
+      if (analysis.environment) {
+        doc.setFontSize(14);
+        doc.text('Environment:', margin, yPos += 10);
+        doc.setFontSize(12);
+        const envLines = doc.splitTextToSize(analysis.environment, 170);
+        doc.text(envLines, margin + 5, yPos += 7);
+        yPos += (envLines.length * 7);
+      }
+  
+      if (analysis.services) {
+        doc.setFontSize(14);
+        doc.text('Services:', margin, yPos += 10);
+        doc.setFontSize(12);
+        const serviceLines = doc.splitTextToSize(analysis.services, 170);
+        doc.text(serviceLines, margin + 5, yPos += 7);
+      }
+  
+      console.log('Saving PDF...');
+      doc.save('incident-report.pdf');
+      console.log('PDF saved');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    }
+  };
 
   // UI states
   const [showMap, setShowMap] = useState(false);
@@ -263,10 +361,7 @@ const handleMouseUp = () => {
 };
 
 // Helper function to handle export
-const handleExport = () => {
-  // TODO: Implement PDF export
-  console.log('Export functionality to be implemented');
-};
+
 
 // Helper function to determine button color based on service type
 const getServiceButtonColor = (service, isSelected) => {
@@ -607,7 +702,7 @@ return (
           if (Object.values(selectedServices).some(v => v)) {
             try {
               // Uncomment this section for the demo
-              /*
+              
               const response = await fetch('http://localhost:8000/api/phone-call', {
                 method: 'POST',
                 headers: {
@@ -621,7 +716,7 @@ return (
               if (!response.ok) {
                 throw new Error('Failed to initiate phone call');
               }
-              */
+              
       
               alert('Emergency services would be dispatched in production');
               setIsConfirmed(true); // Show notes section

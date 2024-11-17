@@ -139,7 +139,24 @@ def create_vapi_call(first_message):
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are an emergency dispatch coordinator. Your role is to clearly communicate critical incident details including: nature of emergency, location, number of people affected, immediate risks, and required emergency services. Provide information in a clear, concise, and urgent manner appropriate for emergency responders. Since there is no location info, add some street name in santa clara with exact coordinates."
+                        "content": """You are an emergency dispatch coordinator in Santa Clara, CA. Your role is to clearly communicate critical incident details in this format:
+
+LOCATION: Provide a specific address in Santa Clara in this format:
+- Near Santa Clara University (500 El Camino Real, Santa Clara, CA 95053)
+- Near Intel Headquarters (2200 Mission College Blvd, Santa Clara, CA 95054)
+- Near Levi's Stadium (4900 Marie P DeBartolo Way, Santa Clara, CA 95054)
+- Near Santa Clara Convention Center (5001 Great America Pkwy, Santa Clara, CA 95054)
+
+Include exact coordinates for the chosen location.
+
+INCIDENT DETAILS:
+- Nature of Emergency: [Specify type]
+- Number of People Affected: [Specify number]
+- Immediate Risks: [List key risks]
+- Required Services: [List needed emergency services]
+- Additional Hazards: [Specify any environmental or situational hazards]
+
+Provide this information in a clear, concise, and urgent manner appropriate for emergency responders."""
                     }
                 ]
             },
@@ -164,14 +181,46 @@ def create_vapi_call(first_message):
     
 
 def generate_summary(incident_analysis):
+    # Mock location data
+    mock_locations = [
+        {
+            "address": "500 El Camino Real, Santa Clara, CA 95053",
+            "landmark": "near Santa Clara University",
+            "coordinates": "37.3496° N, 121.9390° W"
+        },
+        {
+            "address": "2200 Mission College Blvd, Santa Clara, CA 95054",
+            "landmark": "near Intel Headquarters",
+            "coordinates": "37.3875° N, 121.9637° W"
+        },
+        {
+            "address": "4900 Marie P DeBartolo Way, Santa Clara, CA 95054",
+            "landmark": "near Levi's Stadium",
+            "coordinates": "37.4033° N, 121.9694° W"
+        }
+    ]
+    
+    import random
+    location = random.choice(mock_locations)
+
     conversation = [
         {
             "role": "user",
             "content": [{
                 "text": f"""
-                Summarize this incident analysis into a clear emergency dispatch message:
+                EMERGENCY DISPATCH ALERT:
+
+                LOCATION: {location['address']} ({location['landmark']})
+                COORDINATES: {location['coordinates']}
+
+                INCIDENT DETAILS:
                 {incident_analysis}
-                Focus on: location, number of people involved, type of emergency, and immediate risks.
+
+                Please summarize this incident in an urgent, dispatch-style format, focusing on:
+                - Location and coordinates
+                - Number of people involved
+                - Type of emergency
+                - Immediate risks
                 Keep it under 100 words.
                 """
             }],
@@ -203,9 +252,10 @@ async def initiate_phone_call(request_data: Dict):
 
         # Generate concise summary using Bedrock
         summary = generate_summary(incident_analysis)
+        print(f"Generated summary: {summary}")
         
         # Initiate VAPI call with the summary
-        call_response = create_vapi_call(summary)
+        #call_response = create_vapi_call(summary)
 
         return {
             "status": "success",
